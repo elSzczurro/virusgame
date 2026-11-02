@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Virus Game</title>
+<style>
+:root{
+  --bg:#0b1020; --ink:#0b1020; --panel:#d9dde6; --title:#1e3a8a; --titleText:#fff;
+  --danger:#e11d48; --ok:#16a34a; --warn:#ffd23f; --line:#8b93a7;
+  color-scheme:light dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#05070f;--panel:#c3c8d6}}
+:root[data-theme="dark"]{--bg:#05070f}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*{box-sizing:border-box}
+body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Tahoma,"Segoe UI",system-ui,sans-serif;font-size:14px;overflow:hidden}
+#os{position:relative;width:100%;height:100%;overflow:hidden;
+  background:radial-gradient(circle at 30% 20%,#2f6fd6,#123a86 60%,#0a2150);transition:filter .3s}
+#os.sick1{background:radial-gradient(circle at 30% 20%,#9b3b6e,#4a1a4f 60%,#220a30)}
+#os.sick2{background:radial-gradient(circle at 30% 20%,#c1272d,#5a0d14 60%,#1c0307);animation:shake .25s infinite}
+@keyframes shake{0%,100%{transform:translate(0)}25%{transform:translate(-2px,1px)}50%{transform:translate(2px,-1px)}75%{transform:translate(-1px,-2px)}}
+#icons{position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:14px}
+.ico{width:84px;background:none;border:0;color:#fff;text-align:center;font:inherit;cursor:pointer;padding:4px;border-radius:4px;text-shadow:0 1px 2px #000}
+.ico:hover,.ico:focus-visible{background:rgba(255,255,255,.2);outline:1px dotted #fff}
+.ico .g{display:block;font-size:32px;line-height:1.2}
+.win{position:absolute;background:var(--panel);border:2px solid #fff;border-right-color:#555;border-bottom-color:#555;box-shadow:4px 4px 0 rgba(0,0,0,.35);max-width:calc(100% - 12px)}
+.tb{display:flex;align-items:center;gap:6px;background:var(--title);color:var(--titleText);padding:3px 4px 3px 8px;font-weight:700}
+.win.err .tb{background:var(--danger)}
+.tb span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.x{width:26px;height:22px;background:var(--panel);border:2px outset #fff;font-weight:700;cursor:pointer;color:#000;line-height:1;padding:0}
+.x:focus-visible{outline:2px solid var(--warn)}
+.body{padding:10px;color:#000}
+.body p{margin:0 0 10px;line-height:1.4}
+.b{font:inherit;background:var(--panel);border:2px outset #fff;padding:4px 12px;cursor:pointer;color:#000}
+.b:active{border-style:inset}
+.b:focus-visible{outline:2px dotted #000}
+table{width:100%;border-collapse:collapse;background:#fff;color:#000}
+th,td{text-align:left;padding:4px 6px;border-bottom:1px solid #ddd}
+th{background:#eee}
+td.cpu{font-variant-numeric:tabular-nums}
+#tm{top:40px;left:120px;width:min(420px,calc(100% - 130px))}
+#task{position:absolute;left:0;right:0;bottom:0;height:40px;background:#c3c8d6;border-top:2px solid #fff;display:flex;align-items:center;gap:10px;padding:0 8px;color:#000;z-index:5000}
+#task .start{font-weight:700}
+#bars{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+#barwrap{flex:1;height:18px;background:#fff;border:2px inset #fff;max-width:340px}
+#bar{height:100%;width:0;background:var(--ok);transition:width .2s,background .2s}
+#bar.hot{background:var(--danger)}
+#barlbl{white-space:nowrap}
+#clock{font-variant-numeric:tabular-nums}
+.ov{position:fixed;inset:0;background:rgba(5,8,20,.82);display:flex;align-items:center;justify-content:center;padding:20px;z-index:9000}
+.ov[hidden]{display:none}
+.card{background:var(--panel);color:#000;max-width:440px;width:100%;border:3px solid var(--warn);box-shadow:0 0 0 3px #000;padding:24px}
+.card.n{border-color:#fff}
+.card h2{margin:6px 0 10px;font-size:1.4rem}
+.card p{line-height:1.5;margin:0 0 16px;max-width:60ch}
+.badge{display:inline-block;background:var(--warn);font-weight:700;padding:3px 10px}
+.card .b{font-size:1rem;padding:8px 18px;font-weight:700}
+.vi{width:22px;height:22px;object-fit:contain}
+@media (prefers-reduced-motion:reduce){#os.sick2{animation:none}#bar{transition:none}}
+</style>
+</head>
+<body>
+<div id="os">
+  <div id="icons">
+    <button class="ico" data-app="tm"><span class="g">📊</span>Menedżer zadań</button>
+    <button class="ico" data-app="pc"><span class="g">🖥️</span>Mój komputer</button>
+    <button class="ico" data-app="bin"><span class="g">🗑️</span>Kosz</button>
+  </div>
+  <div id="wins"></div>
+  <div id="task">
+    <span class="start">⊞ Start</span>
+    <div id="bars"><span id="barlbl">Infekcja: 0%</span><div id="barwrap"><div id="bar"></div></div></div>
+    <span id="killed">Wirusy: 0/6</span>
+    <span id="clock">12:00</span>
+  </div>
+</div>
+
+<div class="ov" id="warning" role="alertdialog" aria-modal="true" aria-labelledby="wT">
+  <div class="card">
+    <span class="badge">OSTRZEŻENIE</span>
+    <h2 id="wT">Uwaga to nie jest prawdziwy wirus</h2>
+    <p>To tylko gra. System, który zobaczysz, jest fałszywy, a „wirus" nie zainfekuje ani nie zmieni niczego na Twoim urządzeniu.</p>
+    <button class="b" id="startBtn">Rozumiem, uruchom system</button>
+  </div>
+</div>
+<div class="ov" id="end" hidden role="dialog" aria-modal="true" aria-labelledby="eT">
+  <div class="card n"><h2 id="eT"></h2><p id="eP"></p><button class="b" id="againBtn">Zagraj jeszcze raz</button></div>
+</div>
+
+<script>
+(function(){
+  // Tu wstawisz ikonę wirusa (np. "ikona.png"). Puste = emoji 🦠.
+  var VIRUS_ICON = "";
+
+  var TOTAL = 6;
+  var os = document.getElementById("os"), wins = document.getElementById("wins");
+  var bar = document.getElementById("bar"), barlbl = document.getElementById("barlbl");
+  var killedEl = document.getElementById("killed");
+  var warning = document.getElementById("warning"), endBox = document.getElementById("end");
+  var z = 10, running = false, last = 0, tPop = 0, tProc = 0, infection = 0, killed = 0, spawned = 0, popups = 0;
+  var procs = [], tmBody = null;
+
+  var NORMAL = [["explorer.exe",2],["system",1],["audiosrv.exe",1],["netsvc.exe",3],["clock.exe",1]];
+  var VNAMES = ["svch0st.exe","xplorer32.exe","wannaLaugh.exe","update_free.exe","d1sk_eater.exe","c00kie.exe"];
+  var MSGS = ["Wykryto 4096 zagrożeń!","Twój system został zaszyfrowany","Krytyczny błąd: sektor 0x00FF","Dysk C: jest infekowany","Brak odpowiedzi systemu","Czy na pewno chcesz zachować pliki?","Ostrzeżenie: kamera jest włączona (to żart)"];
+
+  function vIcon(){ return VIRUS_ICON ? '<img class="vi" alt="" src="'+VIRUS_ICON+'">' : "🦠"; }
+  function el(h){ var d=document.createElement("div"); d.innerHTML=h; return d.firstElementChild; }
+
+  function openWin(o){
+    var w = el('<div class="win'+(o.err?' err':'')+'" role="dialog" aria-label="'+o.title+'"><div class="tb"><span>'+(o.err?vIcon()+' ':'')+o.title+'</span><button class="x" aria-label="Zamknij">✕</button></div><div class="body"></div></div>');
+    w.style.zIndex = ++z; if (o.id) w.id = o.id;
+    w.style.width = o.w || "300px";
+    var body = w.querySelector(".body"); body.innerHTML = o.html || "";
+    w.style.left = o.x+"px"; w.style.top = o.y+"px";
+    w.addEventListener("pointerdown", function(){ w.style.zIndex = ++z; });
+    w.querySelector(".x").addEventListener("click", function(){ closeWin(w, o); });
+    wins.appendChild(w);
+    return w;
+  }
+  function closeWin(w,o){ if (w.parentNode) w.remove(); if (o && o.onClose) o.onClose(); }
+
+  function rnd(a,b){ return Math.floor(a+Math.random()*(b-a)); }
+
+  function popup(){
+    var W = os.clientWidth, H = os.clientHeight - 40;
+    var pw = Math.min(280, W-20);
+    var trap = Math.random() < 0.4;
+    var o = { err:true, title:"Błąd systemu", w:pw+"px", x:rnd(4,Math.max(5,W-pw-6)), y:rnd(4,Math.max(5,H-150)),
+      html:'<p>'+MSGS[rnd(0,MSGS.length)]+'</p>'+(trap?'<button class="b trap">Napraw teraz</button>':'<button class="b ok">OK</button>'),
+      onClose:function(){ popups--; } };
+    var w = openWin(o); popups++;
+    var t = w.querySelector(".trap");
+    if (t) t.addEventListener("click", function(){ if(running){ popup(); popup(); } });
+    var ok = w.querySelector(".ok");
+    if (ok) ok.addEventListener("click", function(){ closeWin(w,o); });
+  }
+
+  function addProc(name, cpu, virus){ procs.push({name:name,cpu:cpu,virus:virus,id:rnd(1000,9999)}); }
+  function renderTM(){
+    if (!tmBody || !document.body.contains(tmBody)) return;
+    var rows = procs.map(function(p,i){
+      return '<tr><td>'+p.name+'</td><td class="cpu">'+(p.cpu+rnd(0,3))+'%</td><td><button class="b" data-i="'+p.id+'">Zakończ</button></td></tr>';
+    }).join("");
+    tmBody.innerHTML = '<p>Procesy z bardzo wysokim użyciem CPU są podejrzane. Zakończ wszystkie wirusy, ale nie ruszaj procesów systemowych.</p><table><tr><th>Proces</th><th>CPU</th><th></th></tr>'+rows+'</table>';
+  }
+  function endProc(id){
+    var i = procs.findIndex(function(p){ return p.id === id; });
+    if (i < 0 || !running) return;
+    var p = procs[i]; procs.splice(i,1);
+    if (p.virus){ killed++; killedEl.textContent = "Wirusy: "+killed+"/"+TOTAL; infection = Math.max(0, infection-8); if (killed >= TOTAL) finish(true); }
+    else { infection += 12; addProc(p.name, p.cpu, false); popup(); }
+    renderTM();
+  }
+  function openTM(){
+    var ex = document.getElementById("tm");
+    if (ex){ ex.style.zIndex = ++z; return; }
+    var w = openWin({id:"tm", title:"Menedżer zadań", w:"min(420px,calc(100% - 20px))", x:Math.min(110, Math.max(4, os.clientWidth-430)), y:30, html:""});
+    tmBody = w.querySelector(".body");
+    tmBody.addEventListener("click", function(e){ var b = e.target.closest("button[data-i]"); if (b) endProc(+b.dataset.i); });
+    renderTM();
+  }
+  function openInfo(t, txt){
+    openWin({title:t, w:"260px", x:rnd(100,Math.max(101,os.clientWidth-280)), y:rnd(60,160), html:'<p>'+txt+'</p>'});
+  }
+
+  document.querySelectorAll(".ico").forEach(function(b){
+    b.addEventListener("click", function(){
+      if (!running) return;
+      var a = b.dataset.app;
+      if (a==="tm") openTM();
+      else if (a==="pc") openInfo("Mój komputer","Dysk C: zainfekowany.<br>Dysk D: zainfekowany.<br>Nic tu nie pomoże. Otwórz Menedżer zadań.");
+      else openInfo("Kosz","Kosz jest pusty. Wirus zjadł wszystko.");
+    });
+  });
+
+  function paint(){
+    var p = Math.min(100, Math.round(infection));
+    bar.style.width = p+"%"; bar.className = p>60?"hot":"";
+    barlbl.textContent = "Infekcja: "+p+"%";
+    os.className = p>66 ? "sick2" : p>33 ? "sick1" : "";
+  }
+  function clock(){ var d=new Date(); document.getElementById("clock").textContent = ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
+
+  function tick(t){
+    if (!running) return;
+    var dt = Math.min(0.1,(t-last)/1000); last = t;
+    tPop += dt; tProc += dt;
+    if (tPop > 2.4 && popups < 8){ tPop = 0; popup(); }
+    if (tProc > 5 && spawned < TOTAL){ tProc = 0; addProc(VNAMES[spawned], rnd(55,99), true); spawned++; renderTM(); }
+    var active = procs.filter(function(p){ return p.virus; }).length;
+    infection += (popups*0.35 + active*1.3) * dt;
+    paint(); clock();
+    if (infection >= 100) return finish(false);
+    requestAnimationFrame(tick);
+  }
+
+  function start(){
+    wins.innerHTML = ""; procs = []; tmBody = null; popups = 0; killed = 0; spawned = 0; infection = 0; tPop = 0; tProc = 4;
+    killedEl.textContent = "Wirusy: 0/"+TOTAL;
+    NORMAL.forEach(function(n){ addProc(n[0], n[1], false); });
+    running = true; last = performance.now(); paint();
+    openWin({title:"UWAGA", err:true, w:"min(300px,calc(100% - 20px))", x:20, y:150, html:'<p>Twój system złapał poważnego wirusa! Otwórz Menedżer zadań (ikona po lewej) i zakończ wszystkie wirusy.</p>', onClose:function(){}});
+    requestAnimationFrame(tick);
+  }
+  function finish(win){
+    running = false;
+    document.getElementById("eT").textContent = win ? "System uratowany!" : "System zainfekowany";
+    document.getElementById("eP").textContent = win
+      ? "Usunąłeś wszystkie wirusy. Pamiętaj: to była tylko gra."
+      : "Wirus przejął system. Usunięte wirusy: "+killed+" z "+TOTAL+". To tylko gra, spróbuj jeszcze raz.";
+    endBox.hidden = false; document.getElementById("againBtn").focus();
+  }
+  document.getElementById("startBtn").addEventListener("click", function(){ warning.hidden = true; start(); });
+  document.getElementById("againBtn").addEventListener("click", function(){ endBox.hidden = true; start(); });
+  document.getElementById("startBtn").focus(); clock();
+})();
+</script>
+</body>
+</html>
